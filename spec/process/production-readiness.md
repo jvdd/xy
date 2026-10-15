@@ -81,6 +81,10 @@ workflow in `docs/app/README.md`, followed by production compilation and the doc
 validators below. The portable Git lock includes the merged design's shared
 styling hooks and mobile drawer changes; update all Reflex monorepo packages
 together and validate the production app when refreshing it.
+`docs/app/tests/test_docs_layout.py` exercises the real shared layout for first,
+middle, and last pages, verifying the article styling hook, preserved content,
+adjacent link destinations, removal of empty placeholders, and Next's placement
+in the second grid column. These contracts must pass after shared-package updates.
 The desktop XY docs navigation switches to a docs-specific disclosure below
 1280px, preserving Overview and Reflex Integration destinations. Desktop links
 expose the selected section through `aria-current="page"` and a neutral pill.
