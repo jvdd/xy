@@ -2,7 +2,9 @@
    Shared base styles remain owned by reflex-site-shared. */
 /* Docs-only brand layer. Shared package consumers retain their own theme.
    Editorial selectors deliberately exclude live component examples. */
-/* Match marketing with variable WOFF2 subsets bundled from Fontsource. */
+/* Match marketing with variable WOFF2 subsets bundled from Fontsource.
+   Reflex imports this file through Vite, which emits these package URLs as
+   hashed WOFF2 assets under the configured frontend mount. */
 @font-face {
   font-family: 'Geist';
   font-style: normal;

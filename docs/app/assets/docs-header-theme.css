@@ -149,6 +149,7 @@
 }
 .docs-nav-frame [data-announcement] > button {
   position: absolute;
+  /* The shared button's -translate-y-1/2 centers its 28px box at y=20. */
   top: 20px;
   right: 16px;
   display: inline-flex;

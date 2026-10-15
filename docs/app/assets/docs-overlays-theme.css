@@ -250,6 +250,7 @@ html .ReflexSearch-overlay :is(.ReflexSearch-escape, .ReflexSearch-hit, .ReflexS
 
 .docs-feedback-content textarea:is([data-invalid], [aria-invalid="true"], :user-invalid),
 .docs-feedback-content div:has(> input:is([data-invalid], [aria-invalid="true"], :user-invalid)) {
+  /* SharedSiteStylesPlugin supplies this semantic alias of the Radix red scale. */
   border-color: var(--destructive-10);
 }
 

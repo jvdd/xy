@@ -191,7 +191,7 @@ def _example_code_panel(source: str, value: str) -> rx.Component:
                 "[&_div]:!bg-transparent [&_pre]:!bg-transparent "
                 "[&_.code-block]:!bg-transparent [&_.code-block]:!rounded-none "
                 "[&_.code-block]:!border-0 [&_.code-block]:!shadow-none "
-                "[&_summary]:!from-card"
+                "[&_summary]:!from-muted"
             ),
         ),
         value=value,

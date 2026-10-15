@@ -85,6 +85,9 @@ together and validate the production app when refreshing it.
 middle, and last pages, verifying the article styling hook, preserved content,
 adjacent link destinations, removal of empty placeholders, and Next's placement
 in the second grid column. These contracts must pass after shared-package updates.
+Long demo code disclosures fade to the same muted surface as their containing
+card in both color modes. The frontend lock must resolve the declared PostCSS
+version without an older override shadowing the framework's build dependency.
 The desktop XY docs navigation switches to a docs-specific disclosure below
 1280px, preserving Overview and Reflex Integration destinations. Desktop links
 expose the selected section through `aria-current="page"` and a neutral pill.
