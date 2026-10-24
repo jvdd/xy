@@ -135,6 +135,12 @@ to that, and `10:05:00` from a second up to a minute. Zoom in and the tooltip
 sharpens with the axis. Below a second the ISO timestamp stays, because it is
 the only form that carries milliseconds.
 
+How closely your data is sampled sets a floor under that: a pattern is never
+coarser than the gap between the hovered point and the one beside it, so a
+tooltip always tells neighbouring points apart. Ten-second readings over a
+three-minute window read `10:00:10`, not the `Sep 17, 10:00` the span alone
+would give them and that every point of that minute would share.
+
 Because the format is chosen per field, one chart can carry a precise
 timestamp in the tooltip and short labels on the axis:
 
@@ -306,7 +312,8 @@ Pass a strftime pattern for that column, e.g.
 `xy.tooltip(format={"time": "%b %d, %Y, %H:%M"})`. It applies wherever the value
 appears — a field row, a `title=` placeholder, or the band title under
 `mode="x"`. With nothing passed, a time value follows the axis `format=` if
-there is one, and otherwise the visible span. See
+there is one, and otherwise the visible span, never coarser than your data's
+own sampling. See
 [Time and Date Values](#time-and-date-values).
 
 ### How do I customize which fields a tooltip shows and how numbers are formatted?

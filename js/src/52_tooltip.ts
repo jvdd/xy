@@ -552,21 +552,54 @@ Object.assign(ChartView.prototype, {
   _tooltipValueAxis(context) {
     const channel = context && context.channel;
     if (channel !== "x" && channel !== "y") return null;
-    const g = context.g || (context.row
+    const g = this._tooltipContextTrace(context);
+    return this._axis(channel === "x" ? (g && g.xAxis) : (g && g.yAxis));
+  },
+
+  // The gpu trace a tooltip value came from: named outright by a band item,
+  // else looked up from the row's trace id.
+  _tooltipContextTrace(context) {
+    return context.g || (context.row
       ? this.gpuTraces.find((t) => t.trace.id === context.row.trace)
       : null);
-    return this._axis(channel === "x" ? (g && g.xAxis) : (g && g.yAxis));
+  },
+
+  // How finely the hovered series is actually sampled, in ms, so the default
+  // pattern can keep that precision (`defaultTimeFormat`). The gap to the
+  // hovered point's own neighbours is what decides whether its tooltip reads
+  // differently from theirs, and it is O(1); a row with no index to hand falls
+  // back to the column's mean spacing, which is exact for a regular series.
+  _tooltipTimeResolution(context) {
+    const channel = context.channel;
+    const g = this._tooltipContextTrace(context);
+    const cpu = g && g._cpu;
+    const column = cpu && (channel === "x" ? cpu.x : cpu.y);
+    if (!column || column.length < 2) return null;
+    const meta = channel === "x" ? cpu.xMeta || g.xMeta : cpu.yMeta || g.yMeta;
+    const at = (i) => this._decodeValue(column, meta, i);
+    const idx = context.row && Number.isInteger(context.row.index) ? context.row.index : -1;
+    if (idx >= 0 && idx < column.length) {
+      let gap = Infinity;
+      if (idx > 0) gap = Math.min(gap, Math.abs(at(idx) - at(idx - 1)));
+      if (idx + 1 < column.length) gap = Math.min(gap, Math.abs(at(idx + 1) - at(idx)));
+      if (Number.isFinite(gap) && gap > 0) return gap;
+    }
+    // No index to hand (a band title names a slot, not a row): the mean
+    // spacing, which is the exact gap for the regular series this matters for.
+    const total = Math.abs(at(column.length - 1) - at(0));
+    return total > 0 ? total / (column.length - 1) : null;
   },
 
   // strftime pattern for a time-kinded tooltip value with no authored
   // `format=`: the axis's own `format=` first, so the tooltip and the tick
-  // labels under it read the same, then the span-aware default (§7.4).
+  // labels under it read the same, then the default resolved from the span in
+  // view and the series' own sampling (§7.4).
   _tooltipTimeFormat(context) {
     const axis = this._tooltipValueAxis(context);
     if (!axis) return null;
     if (isTimeFormat(axis.format)) return axis.format;
     const [lo, hi] = this._axisRange(axis.id);
-    return defaultTimeFormat(Math.abs(hi - lo));
+    return defaultTimeFormat(Math.abs(hi - lo), this._tooltipTimeResolution(context));
   },
 
   // One grammar for every tooltip value: a strftime `format=` on a time value,
@@ -784,13 +817,13 @@ Object.assign(ChartView.prototype, {
       );
       title = this._formatTooltipValue(
         value, kind, this._tooltipChannelFormat(formats, along, first.trace),
-        { channel: along, g: hits[0] && hits[0].g },
+        { channel: along, g: hits[0] && hits[0].g, row: first },
       );
     } else if (first[along] !== undefined) {
       title = this._formatTooltipValue(
         first[along], first[`${along}_kind`],
         this._tooltipChannelFormat(formats, along, first.trace),
-        { channel: along, g: hits[0] && hits[0].g },
+        { channel: along, g: hits[0] && hits[0].g, row: first },
       );
     }
     if (title) items.push({ kind: "title", value: title });
@@ -806,7 +839,7 @@ Object.assign(ChartView.prototype, {
           .map((f) => {
             const [v, k, channel] = this._tooltipLookup(row, f);
             return v === undefined ? null : this._formatTooltipValue(
-              v, k, this._tooltipFormatFor(formats, f, channel, row.trace), { channel, g },
+              v, k, this._tooltipFormatFor(formats, f, channel, row.trace), { channel, g, row },
             );
           })
           .filter((v) => v !== null)
@@ -817,7 +850,7 @@ Object.assign(ChartView.prototype, {
           : this._formatTooltipValue(
             v, row[`${across}_kind`],
             this._tooltipChannelFormat(formats, across, row.trace),
-            { channel: across, g },
+            { channel: across, g, row },
           );
       }
       items.push({ kind: "series", label: name, value, color: this._seriesColorCss(g) });

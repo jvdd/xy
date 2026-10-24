@@ -493,23 +493,40 @@ rather than a value.
   up by channel — the band title among them.
 - A time value with nothing authored on it resolves a pattern rather than
   falling through to the ISO stamp: the **axis's own strftime `format=`**
-  first, so a tooltip and the tick labels under it read alike, then the
-  **visible span**. Only a strftime axis format is inherited — a numeric one on
-  a time axis is not a pattern this value can be read through — and only a
-  position channel has an axis to inherit from, so a time value carried by
-  colour or size takes the span default and then the ISO stamp:
+  first, so a tooltip and the tick labels under it read alike, then a default
+  resolved from the **visible span** and the hovered series' **own sampling**.
+  Only a strftime axis format is inherited — a numeric one on a time axis is
+  not a pattern this value can be read through — and only a position channel
+  has an axis to inherit from. Colour and size have none, and never reach this
+  path at all: their values ship with no kind, so they are read as numbers and
+  a `format=` on them is the numeric spec.
 
-  | span in view | pattern |
+  The span picks the tier, which is how much CONTEXT the value needs — a
+  month-wide window wants the year, a three-minute one does not:
+
+  | span in view | tier |
   | --- | --- |
   | ≥ 28 d | `%b %d, %Y` |
   | ≥ 1 min | `%b %d, %H:%M` |
   | ≥ 1 s | `%H:%M:%S` |
   | < 1 s | none — the ISO stamp stays, as it is the only form carrying ms |
 
-  Each tier is one granularity finer than the axis labels the same span
-  produces: a tooltip names one point, an axis label a whole interval. The
-  span is the hovered trace's own x/y axis range, so a secondary axis formats
-  by its own view (`defaultTimeFormat`, `js/src/30_ticks.ts`).
+  The sampling is then the floor that tier may not coarsen past, which is how
+  much PRECISION it must keep: the tier steps to the next finer one while its
+  own unit is **strictly coarser** than the gap between the hovered point and
+  its neighbours (`_tooltipTimeResolution`, `js/src/52_tooltip.ts`). A tooltip
+  names ONE point, and a pattern that prints the same string for a point and
+  the one beside it names none — ten-second samples in a three-minute window
+  share a minute, hourly samples in a month-wide one share a date, and the
+  span alone cannot know it, because a span says nothing about how close the
+  samples are. The comparison is strict, so a tier whose unit *equals* the
+  spacing stands: daily samples already differ in date, and a month-wide
+  window of them is not given a clock it has no use for. With no index to hand
+  — a band title names a slot, not a row — the gap is the column's mean
+  spacing, exact for the regular series this matters for.
+
+  The span is the hovered trace's own x/y axis range, so a secondary axis
+  formats by its own view (`defaultTimeFormat`, `js/src/30_ticks.ts`).
 - `format=` alone is enough. It used to reach values only alongside `fields=`
   or `title=`, because an otherwise-empty tooltip short-circuited to the
   default rows before formats were read.

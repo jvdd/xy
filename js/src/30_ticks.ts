@@ -242,18 +242,36 @@ export function isTimeFormat(format) {
   return typeof format === "string" && /%[YmdHMSbB]/.test(format);
 }
 
-// The strftime pattern a time value reads best in when nothing was authored,
-// chosen from the span currently in view. A tooltip names ONE point, so each
-// tier is a granularity finer than the axis labels the same span produces
-// (§7.4): a week-wide window ticks in days and hovers to the minute. Below a
-// second there is no strftime token for milliseconds, so the caller keeps the
-// ISO fallback, which carries them.
-export function defaultTimeFormat(span) {
+// The strftime pattern a time value reads best in when nothing was authored.
+// The span in view sets how much CONTEXT a tier carries — a month-wide window
+// wants the year, a three-minute one does not — and the data's own spacing sets
+// how much PRECISION it must keep.
+//
+// The span alone is not enough, and cannot be: it says nothing about how close
+// the samples are. Ten-second samples in a three-minute window share a minute,
+// and hourly samples over a month share a date, so a tier read off the span
+// printed one string for two adjacent points and the tooltip stopped naming
+// either of them. The tier is therefore refined until it can resolve
+// `resolution`, the gap to the hovered sample's neighbours
+// (`_tooltipTimeResolution`, §7.4).
+//
+// A tier whose own unit EQUALS the spacing still separates two samples — points
+// a day apart differ in date — so only a strictly coarser tier is refined past.
+// Below a second there is no strftime token for milliseconds, so the caller
+// keeps the ISO fallback, which carries them.
+const TIME_TIERS = [
+  { resolution: MS.d, pattern: "%b %d, %Y" },
+  { resolution: MS.m, pattern: "%b %d, %H:%M" },
+  { resolution: MS.s, pattern: "%H:%M:%S" },
+];
+
+export function defaultTimeFormat(span, resolution) {
   if (!Number.isFinite(span) || span <= 0) return null;
-  if (span >= 28 * MS.d) return "%b %d, %Y";
-  if (span >= MS.m) return "%b %d, %H:%M";
-  if (span >= MS.s) return "%H:%M:%S";
-  return null;
+  let tier = span >= 28 * MS.d ? 0 : span >= MS.m ? 1 : span >= MS.s ? 2 : TIME_TIERS.length;
+  if (Number.isFinite(resolution) && resolution > 0) {
+    while (tier < TIME_TIERS.length && TIME_TIERS[tier].resolution > resolution) tier++;
+  }
+  return tier < TIME_TIERS.length ? TIME_TIERS[tier].pattern : null;
 }
 
 export function fmtTimeSpec(ms, format) {

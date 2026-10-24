@@ -5,8 +5,8 @@ time-kinded value, the numeric spec otherwise. A datetime column reaches the
 row under its channel alias (``"time"`` -> ``"x"``), so the format has to be
 resolvable from either the column name or the channel, and a time value with no
 authored format still resolves one — the axis's own ``format=``, else the
-pattern its visible span reads best in — instead of falling through to a raw
-ISO stamp.
+pattern its visible span reads best in, never coarser than the series' own
+sampling — instead of falling through to a raw ISO stamp.
 
 Browser probes drive the real client; they skip (never fail) without Chromium,
 like the repo's others.
@@ -174,6 +174,71 @@ _SPAN_CASES = """
 """
 
 
+# The adjacent-points probe stands apart from the market prelude: it hovers two
+# points rather than one and reads the x value off each, which is the whole
+# question it asks — whether the default pattern tells neighbours apart.
+_ADJACENT_PROBE = """
+<script>
+(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    const view = window.__fcProbeView;
+    if (!view) throw new Error("no probe view captured");
+    view._drawNow();
+    view._raf = null;
+    view.comm = { send: () => {} };
+    for (let i = 0; i < 200 && !view.gpuTraces[0]._cpu; i++) await sleep(25);
+    const rect = view.canvas.getBoundingClientRect();
+    const g = view.gpuTraces[0];
+    const xAt = (i) => view._decodeValue(g._cpu.x, g._cpu.xMeta || g.xMeta, i);
+    const yAt = (i) => view._decodeValue(g._cpu.y, g._cpu.yMeta || g.yMeta, i);
+    const tip = view.tooltip;
+    // Re-hovering is a no-op on an unchanged hit id, so each read starts from
+    // no hover at all — the same reset the market probe makes.
+    const hoverPoint = (index) => {
+      view._hoverId = -1;
+      view._hideTooltip();
+      const [px, py] = view._projectDataPoint(g.xAxis, g.yAxis, xAt(index), yAt(index));
+      view._hover({ clientX: rect.left + px - view.plot.x, clientY: rect.top + py - view.plot.y });
+      return [...tip.querySelectorAll('[data-xy-slot="tooltip_row"]')].map((r) => r.textContent);
+    };
+    // A window of the asked-for width, centred on the pair, so both are in
+    // view and the span alone would pick one tier for the two of them.
+    const mid = (xAt(INDEX) + xAt(INDEX + 1)) / 2;
+    view.view.ranges.x = [mid - SPAN / 2, mid + SPAN / 2];
+    const out = { first: hoverPoint(INDEX), second: hoverPoint(INDEX + 1) };
+    document.body.setAttribute(ATTRIBUTE, JSON.stringify(out));
+  } catch (err) {
+    document.body.setAttribute(ATTRIBUTE + "-error", String((err && err.stack) || err));
+  }
+})();
+</script>
+"""
+
+
+def _sampled_chart(step: dt.timedelta, count: int = 40):
+    """One series sampled every `step` from `START`, for the spacing-sensitive
+    probes: the gap between neighbours is the whole fixture."""
+    times = [START + step * i for i in range(count)]
+    values = [0.10 + 0.02 * i for i in range(count)]
+    return xy.line_chart(
+        xy.line("time", "value", data={"time": times, "value": values}, name="S"),
+        xy.tooltip(),
+        xy.interaction_config(hover=True),
+        width=640,
+        height=360,
+    )
+
+
+def _adjacent_probe(span_ms: float, attribute: str) -> str:
+    """`_ADJACENT_PROBE` bound to a window width and an output attribute."""
+    return (
+        _ADJACENT_PROBE.replace("ATTRIBUTE", f'"{attribute}"')
+        .replace("INDEX", str(HOVER_INDEX))
+        .replace("SPAN", repr(float(span_ms)))
+    )
+
+
 def _market_probe(cases: str, attribute: str) -> str:
     """The shared prelude with `cases` spliced in, bound to `attribute`."""
     return (
@@ -233,15 +298,46 @@ def test_browser_time_tooltip_default_follows_the_visible_span() -> None:
     probe = _market_probe(_SPAN_CASES, "data-xy-tipspan")
     payload = _run_format_probe(_market_chart(), "data-xy-tipspan", probe, "tooltip span")
 
-    # Each tier is one granularity finer than the axis labels the same span
-    # produces: a months-wide window hovers to the day, a minutes-wide one to
-    # the minute (spec §7.4).
-    assert payload["spanMonths"]["rows"][0] == "xSep 17, 2026", payload["spanMonths"]
+    # The span picks the tier, and the series' own spacing is the floor it may
+    # not coarsen past (spec §7.4). These samples are five minutes apart, so
+    # even a months-wide window keeps the clock time: dropping it would print
+    # one string for every point of the hovered hour.
+    assert payload["spanMonths"]["rows"][0] == "xSep 17, 10:05", payload["spanMonths"]
     assert payload["spanMinutes"]["rows"][0] == "xSep 17, 10:05", payload["spanMinutes"]
     assert payload["spanSeconds"]["rows"][0] == "x10:05:00", payload["spanSeconds"]
     # Below a second there is no strftime token for milliseconds, so the ISO
     # stamp — which carries them — stays the honest answer.
     assert payload["spanSubSecond"]["rows"][0].endswith("Z"), payload["spanSubSecond"]
+
+
+def test_browser_time_tooltip_default_separates_adjacent_samples() -> None:
+    """The span sets how much context the pattern carries; the sampling sets
+    how much precision it keeps. A tier read off the span alone printed the
+    same string for two adjacent points whenever the samples sat inside one of
+    its units — ten-second samples share a minute, hourly ones share a date —
+    and a tooltip that cannot tell neighbours apart names no point at all."""
+    seconds = _run_format_probe(
+        _sampled_chart(dt.timedelta(seconds=10)),
+        "data-xy-tipadj",
+        _adjacent_probe(3 * 60 * 1000, "data-xy-tipadj"),
+        "ten-second samples",
+    )
+    # A three-minute window reads to the minute on its own; these points are
+    # ten seconds apart, so the tier refines until it can separate them.
+    assert seconds["first"][0] == "x10:00:10", seconds
+    assert seconds["second"][0] == "x10:00:20", seconds
+
+    days = _run_format_probe(
+        _sampled_chart(dt.timedelta(days=1)),
+        "data-xy-tipadj",
+        _adjacent_probe(40 * 864e5, "data-xy-tipadj"),
+        "daily samples",
+    )
+    # The refinement stops as soon as the tier resolves the data: daily samples
+    # already differ in date, so a month-wide window is not given a clock it
+    # has no use for.
+    assert days["first"][0] == "xSep 18, 2026", days
+    assert days["second"][0] == "xSep 19, 2026", days
 
 
 _BAND_FORMAT_PROBE = """
