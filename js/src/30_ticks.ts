@@ -243,35 +243,55 @@ export function isTimeFormat(format) {
 }
 
 // The strftime pattern a time value reads best in when nothing was authored.
-// The span in view sets how much CONTEXT a tier carries — a month-wide window
-// wants the year, a three-minute one does not — and the data's own spacing sets
-// how much PRECISION it must keep.
+// Two independent questions, which one ladder of whole patterns could not keep
+// apart:
 //
-// The span alone is not enough, and cannot be: it says nothing about how close
-// the samples are. Ten-second samples in a three-minute window share a minute,
-// and hourly samples over a month share a date, so a tier read off the span
-// printed one string for two adjacent points and the tooltip stopped naming
-// either of them. The tier is therefore refined until it can resolve
-// `resolution`, the gap to the hovered sample's neighbours
-// (`_tooltipTimeResolution`, §7.4).
+// How much CONTEXT — whether the year, the date, or neither belongs on the
+// value — is the span's to answer. A month-wide window wants the year, a
+// three-minute one does not.
 //
-// A tier whose own unit EQUALS the spacing still separates two samples — points
-// a day apart differ in date — so only a strictly coarser tier is refined past.
-// Below a second there is no strftime token for milliseconds, so the caller
-// keeps the ISO fallback, which carries them.
-const TIME_TIERS = [
-  { resolution: MS.d, pattern: "%b %d, %Y" },
-  { resolution: MS.m, pattern: "%b %d, %H:%M" },
-  { resolution: MS.s, pattern: "%H:%M:%S" },
+// How much PRECISION is the span's answer FLOORED by the data's own spacing. A
+// tooltip names ONE point, and a pattern that prints the same string for a
+// point and the one beside it names neither; the span cannot know, because it
+// says nothing about how close the samples are. Ten-second samples in a
+// three-minute window share a minute, and hourly samples over a month share a
+// date.
+//
+// Composing the two is what keeps them from trading off: refining a ladder of
+// patterns instead would have bought the precision by dropping the date, so
+// per-second samples in a month-wide window read `10:00:10` and never said
+// which day.
+const SPAN_TIERS = [
+  { min: 28 * MS.d, date: "%b %d, %Y", precision: 0 },
+  { min: MS.m, date: "%b %d", precision: 1 },
+  { min: MS.s, date: null, precision: 2 },
 ];
+// Indexed by precision: the clock a value needs to separate it from the next.
+// Past the end is finer than any strftime token, so the caller keeps the ISO
+// stamp, which is the only form carrying milliseconds.
+const TIME_PARTS = [null, "%H:%M", "%H:%M:%S"];
+
+// The coarsest clock that still tells apart two samples `gap` ms apart. The
+// comparison is >=, so a gap that equals a unit is separated by it: points a
+// day apart differ in date, and a month-wide window of them is not given a
+// clock it has no use for.
+function gapPrecision(gap) {
+  if (gap >= MS.d) return 0;
+  if (gap >= MS.m) return 1;
+  if (gap >= MS.s) return 2;
+  return TIME_PARTS.length;
+}
 
 export function defaultTimeFormat(span, resolution) {
   if (!Number.isFinite(span) || span <= 0) return null;
-  let tier = span >= 28 * MS.d ? 0 : span >= MS.m ? 1 : span >= MS.s ? 2 : TIME_TIERS.length;
-  if (Number.isFinite(resolution) && resolution > 0) {
-    while (tier < TIME_TIERS.length && TIME_TIERS[tier].resolution > resolution) tier++;
-  }
-  return tier < TIME_TIERS.length ? TIME_TIERS[tier].pattern : null;
+  const tier = SPAN_TIERS.find((t) => span >= t.min);
+  if (!tier) return null;
+  const precision = Math.max(
+    tier.precision,
+    Number.isFinite(resolution) && resolution > 0 ? gapPrecision(resolution) : 0,
+  );
+  if (precision >= TIME_PARTS.length) return null;
+  return [tier.date, TIME_PARTS[precision]].filter(Boolean).join(", ") || null;
 }
 
 export function fmtTimeSpec(ms, format) {

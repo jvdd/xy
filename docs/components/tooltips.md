@@ -135,11 +135,19 @@ to that, and `10:05:00` from a second up to a minute. Zoom in and the tooltip
 sharpens with the axis. Below a second the ISO timestamp stays, because it is
 the only form that carries milliseconds.
 
-How closely your data is sampled sets a floor under that: a pattern is never
-coarser than the gap between the hovered point and the one beside it, so a
-tooltip always tells neighbouring points apart. Ten-second readings over a
-three-minute window read `10:00:10`, not the `Sep 17, 10:00` the span alone
-would give them and that every point of that minute would share.
+How closely your data is sampled sharpens that clock: a pattern the chart
+picks for you is never coarser than the gap between the hovered point and the
+one beside it, so neighbouring points always read differently. Ten-second
+readings over a three-minute window read `Sep 17, 10:00:10`, not the
+`Sep 17, 10:00` the span alone would give them and that every point of that
+minute would share. The date the window called for stays — precision is added
+to it, never swapped for it, so a per-second series two months wide reads
+`Sep 17, 2026, 10:00:10`.
+
+A pattern you wrote yourself is used exactly as written, including one the
+tooltip inherits from the axis — that is the point of the inheritance, so the
+tooltip and the ticks beneath it agree. If `xy.x_axis(format="%H:%M")` is too
+coarse to tell your points apart, write the seconds in.
 
 Because the format is chosen per field, one chart can carry a precise
 timestamp in the tooltip and short labels on the axis:

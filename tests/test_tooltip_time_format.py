@@ -298,11 +298,12 @@ def test_browser_time_tooltip_default_follows_the_visible_span() -> None:
     probe = _market_probe(_SPAN_CASES, "data-xy-tipspan")
     payload = _run_format_probe(_market_chart(), "data-xy-tipspan", probe, "tooltip span")
 
-    # The span picks the tier, and the series' own spacing is the floor it may
-    # not coarsen past (spec §7.4). These samples are five minutes apart, so
-    # even a months-wide window keeps the clock time: dropping it would print
-    # one string for every point of the hovered hour.
-    assert payload["spanMonths"]["rows"][0] == "xSep 17, 10:05", payload["spanMonths"]
+    # The span picks the date context, and the series' own spacing floors the
+    # clock (spec §7.4). These samples are five minutes apart, so a months-wide
+    # window keeps both: the year, because the window is that wide, and the
+    # time, because dropping it would print one string for every point of the
+    # hovered hour.
+    assert payload["spanMonths"]["rows"][0] == "xSep 17, 2026, 10:05", payload["spanMonths"]
     assert payload["spanMinutes"]["rows"][0] == "xSep 17, 10:05", payload["spanMinutes"]
     assert payload["spanSeconds"]["rows"][0] == "x10:05:00", payload["spanSeconds"]
     # Below a second there is no strftime token for milliseconds, so the ISO
@@ -323,9 +324,11 @@ def test_browser_time_tooltip_default_separates_adjacent_samples() -> None:
         "ten-second samples",
     )
     # A three-minute window reads to the minute on its own; these points are
-    # ten seconds apart, so the tier refines until it can separate them.
-    assert seconds["first"][0] == "x10:00:10", seconds
-    assert seconds["second"][0] == "x10:00:20", seconds
+    # ten seconds apart, so the clock sharpens until it can separate them. The
+    # date the window called for is untouched by that — the two are composed,
+    # not traded off.
+    assert seconds["first"][0] == "xSep 17, 10:00:10", seconds
+    assert seconds["second"][0] == "xSep 17, 10:00:20", seconds
 
     days = _run_format_probe(
         _sampled_chart(dt.timedelta(days=1)),
@@ -333,11 +336,30 @@ def test_browser_time_tooltip_default_separates_adjacent_samples() -> None:
         _adjacent_probe(40 * 864e5, "data-xy-tipadj"),
         "daily samples",
     )
-    # The refinement stops as soon as the tier resolves the data: daily samples
-    # already differ in date, so a month-wide window is not given a clock it
-    # has no use for.
+    # The sharpening stops as soon as the pattern resolves the data: daily
+    # samples already differ in date, so a month-wide window is not given a
+    # clock it has no use for.
     assert days["first"][0] == "xSep 18, 2026", days
     assert days["second"][0] == "xSep 19, 2026", days
+
+
+def test_browser_time_tooltip_default_keeps_the_date_a_wide_window_calls_for() -> None:
+    """Precision is never bought with context. Resolving a one-second series
+    by walking DOWN a ladder of whole patterns reaches `%H:%M:%S`, which names
+    no day at all — so a point two months out read `10:00:10` and the reader
+    could not tell which of sixty days it was on. The date the span calls for
+    and the clock the sampling calls for are composed instead."""
+    payload = _run_format_probe(
+        _sampled_chart(dt.timedelta(seconds=1)),
+        "data-xy-tipadj",
+        # Forty days of window over forty seconds of data: every point lands in
+        # the same pixel, so which one is hovered is not the question here —
+        # the pattern it is read through is.
+        _adjacent_probe(40 * 864e5, "data-xy-tipadj"),
+        "one-second samples in a wide window",
+    )
+    row = payload["first"][0]
+    assert row.startswith("xSep 17, 2026, 10:00:"), payload
 
 
 _BAND_FORMAT_PROBE = """

@@ -501,29 +501,47 @@ rather than a value.
   path at all: their values ship with no kind, so they are read as numbers and
   a `format=` on them is the numeric spec.
 
-  The span picks the tier, which is how much CONTEXT the value needs — a
-  month-wide window wants the year, a three-minute one does not:
+  The pattern is **composed** from two independent answers, never traded off
+  one against the other. The span answers how much CONTEXT the value carries
+  — whether the year, the date, or neither belongs on it — and sets a baseline
+  clock:
 
-  | span in view | tier |
-  | --- | --- |
-  | ≥ 28 d | `%b %d, %Y` |
-  | ≥ 1 min | `%b %d, %H:%M` |
-  | ≥ 1 s | `%H:%M:%S` |
-  | < 1 s | none — the ISO stamp stays, as it is the only form carrying ms |
+  | span in view | date part | clock |
+  | --- | --- | --- |
+  | ≥ 28 d | `%b %d, %Y` | none |
+  | ≥ 1 min | `%b %d` | `%H:%M` |
+  | ≥ 1 s | none | `%H:%M:%S` |
+  | < 1 s | — | none — the ISO stamp stays, as it is the only form carrying ms |
 
-  The sampling is then the floor that tier may not coarsen past, which is how
-  much PRECISION it must keep: the tier steps to the next finer one while its
-  own unit is **strictly coarser** than the gap between the hovered point and
-  its neighbours (`_tooltipTimeResolution`, `js/src/52_tooltip.ts`). A tooltip
-  names ONE point, and a pattern that prints the same string for a point and
-  the one beside it names none — ten-second samples in a three-minute window
-  share a minute, hourly samples in a month-wide one share a date, and the
-  span alone cannot know it, because a span says nothing about how close the
-  samples are. The comparison is strict, so a tier whose unit *equals* the
-  spacing stands: daily samples already differ in date, and a month-wide
-  window of them is not given a clock it has no use for. With no index to hand
-  — a band title names a slot, not a row — the gap is the column's mean
-  spacing, exact for the regular series this matters for.
+  The hovered series' sampling then answers how much PRECISION the clock must
+  keep, and can only sharpen it: the clock is the finer of the span's and the
+  coarsest unit that still separates samples a `resolution` apart — `%H:%M`
+  from a minute up, `%H:%M:%S` from a second up, and finer than a second there
+  is no strftime token, so the ISO stamp stays. `resolution` is the gap
+  between the hovered point and its neighbours (`_tooltipTimeResolution`,
+  `js/src/52_tooltip.ts`). Every call site carries the hovered row, a band's
+  title and series rows included, so that gap is normally the row's own; a
+  context that reaches the formatter without a row index falls back to the
+  column's mean spacing, exact for the regular series this matters for.
+
+  A tooltip names ONE point, and a pattern that prints the same string for a
+  point and the one beside it names none: ten-second samples in a three-minute
+  window share a minute, hourly samples in a month-wide one share a date, and
+  the span alone cannot know it, because a span says nothing about how close
+  the samples are. The unit comparison is `>=`, so a gap that equals a unit is
+  separated by it — daily samples already differ in date, and a month-wide
+  window of them is not given a clock it has no use for.
+
+  Composing the two is what keeps them independent. Resolving instead by
+  walking down a ladder of whole patterns buys the precision by dropping the
+  date: per-second samples in a month-wide window land on `%H:%M:%S` and name
+  no day at all. Composed, they read `%b %d, %Y, %H:%M:%S`.
+
+  The floor is the resolved default's alone. An authored pattern is used as
+  written, and so is one inherited from the axis — that inheritance exists so
+  a tooltip and the ticks under it read alike, which a silent sharpening would
+  undo. `x_axis(format="%H:%M")` over ten-second samples therefore does
+  collapse neighbouring points, and the answer is to author `%H:%M:%S`.
 
   The span is the hovered trace's own x/y axis range, so a secondary axis
   formats by its own view (`defaultTimeFormat`, `js/src/30_ticks.ts`).
