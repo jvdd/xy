@@ -142,7 +142,9 @@ readings over a three-minute window read `Sep 17, 10:00:10`, not the
 `Sep 17, 10:00` the span alone would give them and that every point of that
 minute would share. The date the window called for stays — precision is added
 to it, never swapped for it, so a per-second series two months wide reads
-`Sep 17, 2026, 10:00:10`.
+`Sep 17, 2026, 10:00:10`. Sampled finer than a second, there is no pattern
+left to sharpen to, so the ISO timestamp comes back whatever the window —
+500 ms readings three minutes wide read the full stamp, not `Sep 17, 10:00`.
 
 A pattern you wrote yourself is used exactly as written, including one the
 tooltip inherits from the axis — that is the point of the inheritance, so the
