@@ -133,8 +133,10 @@ cannot reach crates.io, so required crates must be vendored or the sandbox
 loses local build/test; prefer feature-gated optional deps (e.g. SIMD
 argminmax, tsdownsample-class speed) with the lean build as default.
 `argminmax` (M4, §3.4) is a plain dependency, not a gated one: the release
-wheels build with default features (`hatch_build.py`), so a gated crate would
-not reach users. Its tree is `argminmax` + `num-traits` (+ `autocfg` at build).
+wheels build xy-core with its default Cargo features (`hatch_build.py` runs a
+plain `cargo build --release`), so a gated crate would not reach users. It is
+used with `default-features = false, features = ["float"]`; its tree is
+`argminmax` + `num-traits` (+ `autocfg` at build).
 
 Release profile (`Cargo.toml`, 2026-07-27): `lto = "fat"`, `codegen-units =
 1`, `strip = true`. Fat LTO measured no runtime change over thin on the §12
@@ -318,8 +320,9 @@ Rules, in priority order:
    loses (histogram's scatter-dominated loop) is documented at its scalar
    definition and NOT dispatched. It lost on M4's per-row bucket state machine
    too, so M4 windows that average at least 8 rows per bucket
-   (`M4_BUCKET_WALK_MIN_ROWS`) walk whole buckets instead and hand each
-   bucket's y to `try_argminmax` (3–9× at 1M points, single thread). Sparser
+   (`M4_BUCKET_WALK_MIN_ROWS`) walk whole buckets instead and hand the y of
+   each bucket of 32+ rows to `try_argminmax` (3–9× at 1M points, single
+   thread); shorter buckets take a scalar scan. Sparser
    windows (deep zooms) keep the per-row loop, which is faster there. A fuzz
    test in `kernels.rs` checks that both M4 paths emit the same rows.
 3. **`unsafe` containment.** This module is the one exception to "unsafe only

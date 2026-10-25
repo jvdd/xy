@@ -13,9 +13,9 @@
 //! dominates and the extra block pass costs more than the vector math saves);
 //! see the note on its scalar kernel. The same two-phase restructure lost on
 //! M4 too, so M4 windows that average 8+ rows per bucket scan whole buckets
-//! instead: [`try_argminmax`] hands each bucket's y to the `argminmax` crate,
-//! which picks its own SIMD width at run time (SSE4.1/AVX2/AVX-512, NEON):
-//! M4 at 1M points runs 3–9× faster.
+//! instead: [`try_argminmax`] hands the y of each bucket of 32+ rows to the
+//! `argminmax` crate, which picks its own SIMD width at run time
+//! (SSE4.1/AVX2/AVX-512, NEON): M4 at 1M points runs 3–9× faster.
 //!
 //! Rules (rust-engine doc §3.4):
 //! - Only kernels whose outputs are **order-independent** are accelerated:

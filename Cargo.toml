@@ -9,8 +9,8 @@ license = "Apache-2.0"
 # platform covers every CPython version. Static chart export uses the focused
 # `png` crate's fdeflate fast path; compression belongs beside rasterization so
 # the hot path never round-trips a full framebuffer through Python. M4
-# decimation scans each bucket with `argminmax`'s runtime-dispatched SIMD
-# argmin/argmax (spec/design/rust-engine.md §3.4).
+# decimation scans buckets of 32+ rows in dense windows with `argminmax`'s
+# runtime-dispatched SIMD argmin/argmax (spec/design/rust-engine.md §3.4).
 [lib]
 name = "xy_core"
 crate-type = ["cdylib", "rlib"]
